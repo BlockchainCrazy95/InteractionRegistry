@@ -4,7 +4,6 @@ pragma solidity ^0.8.7;
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-
 contract InteractionsRegistry is ReentrancyGuard{
     using SafeMath for uint256;
 
@@ -26,10 +25,10 @@ contract InteractionsRegistry is ReentrancyGuard{
     event SumbitInteraction(address indexed sender, address indexed receiver, address senderApp, address receiverApp, uint256 amount);
 
     // Function to receive Ether. msg.data must be empty
-    // receive() external payable {}
+    receive() external payable {}
 
     // Fallback function is called when msg.data is not empty
-    // fallback() external payable {}
+    fallback() external payable {}
 
     /**
      * @dev Add credit
@@ -69,21 +68,28 @@ contract InteractionsRegistry is ReentrancyGuard{
      * @param senderAppAddr Sender Dapp address who will receive 25% of fee
      * @param receiverAppAddr Receiver Dapp address who will receive 25% of fee
      */
-    function submitInteraction(address sender, address receiver, address senderAppAddr, address receiverAppAddr) public payable nonReentrant{
+    function submitInteraction(address sender, address receiver, address senderAppAddr, address receiverAppAddr) external payable nonReentrant{
         AccountCreditInfo storage creditInfo = _creditInfo[sender];
 
         require(msg.value >= PRICE_PER_INTERACTION, "Insufficient funds");
         require(creditInfo.ethAmount >= msg.value, "Insufficient credit");
-        uint256 receiverAmount = msg.value / 2;
-        uint256 appAmount = msg.value / 4;
+
+        uint256 fee = msg.value.mul(5).div(100);
+        (bool success,) = payable(address(this)).call{value: fee}("");
+        require(success, "Sending fee to contract failed");
+        creditInfo.ethAmount = creditInfo.ethAmount.sub(fee);
+        uint256 restAmount = msg.value.sub(fee);
+        uint256 receiverAmount = restAmount / 2;
+        uint256 appAmount = restAmount / 4;
         (bool success1,) = payable(receiver).call{value: receiverAmount}("");
         require(success1, "Sending ETH failed");
+        creditInfo.ethAmount = creditInfo.ethAmount.sub(receiverAmount);
         (bool success2,) = payable(senderAppAddr).call{value: appAmount}("");
         require(success2, "Sending ETH failed");
+        creditInfo.ethAmount = creditInfo.ethAmount.sub(appAmount);
         (bool success3,) = payable(receiverAppAddr).call{value: appAmount}("");
         require(success3, "Sending ETH failed");
-
-        creditInfo.ethAmount = creditInfo.ethAmount.sub(msg.value);
+        creditInfo.ethAmount = creditInfo.ethAmount.sub(appAmount);
 
         emit SumbitInteraction(sender, receiver, senderAppAddr, receiverAppAddr, msg.value);
     }
