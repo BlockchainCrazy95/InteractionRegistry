@@ -72,23 +72,32 @@ contract InteractionsRegistry is ReentrancyGuard{
         AccountCreditInfo storage creditInfo = _creditInfo[sender];
 
         require(msg.value >= PRICE_PER_INTERACTION, "Insufficient funds");
+        // Check sender's balance for interaction
         require(creditInfo.ethAmount >= msg.value, "Insufficient credit");
 
+        // Calculate 5% fee for each interaction 
         uint256 fee = msg.value.mul(5).div(100);
+        // Send fee ETH to this smart contract
         (bool success,) = payable(address(this)).call{value: fee}("");
         require(success, "Sending fee to contract failed");
+        // If sending fee succeed, sender's ethAmount decreased
         creditInfo.ethAmount = creditInfo.ethAmount.sub(fee);
         uint256 restAmount = msg.value.sub(fee);
+        // Caculate 50% of rest amount except fee
         uint256 receiverAmount = restAmount / 2;
+        // Caculate 25% of rest amount except fee
         uint256 appAmount = restAmount / 4;
         (bool success1,) = payable(receiver).call{value: receiverAmount}("");
         require(success1, "Sending ETH failed");
+        // If sending ETH to receiver succeed, sender's ethAmount decreased
         creditInfo.ethAmount = creditInfo.ethAmount.sub(receiverAmount);
         (bool success2,) = payable(senderAppAddr).call{value: appAmount}("");
         require(success2, "Sending ETH failed");
+        // If sending ETH to senderAppAddr succeed, sender's ethAmount decreased
         creditInfo.ethAmount = creditInfo.ethAmount.sub(appAmount);
         (bool success3,) = payable(receiverAppAddr).call{value: appAmount}("");
         require(success3, "Sending ETH failed");
+        // If sending ETH to receiverAppAddr succeed, sender's ethAmount decreased
         creditInfo.ethAmount = creditInfo.ethAmount.sub(appAmount);
 
         emit SumbitInteraction(sender, receiver, senderAppAddr, receiverAppAddr, msg.value);
